@@ -1,0 +1,70 @@
+MODULE main
+VAR 
+    TrainE : process modes(TrainW.signal);
+    TrainW : process modes(TrainE.signal);
+ASSIGN
+
+   LTLSPEC G !( TrainW.state=bridge & TrainE.state=bridge );
+   LTLSPEC G (F ( TrainW.state=bridge ));
+   LTLSPEC G ( ( TrainW.state=wait ) -> F (TrainW.signal=TRUE));
+   LTLSPEC G ( ( TrainW.state=wait ) -> F (TrainW.signal=TRUE | TrainE.state=bridge));
+   LTLSPEC G (F !( TrainE.state=bridge )) -> G (( TrainW.state=wait ) -> F (TrainW.signal=TRUE));
+
+
+
+MODULE modes(signalOther)
+VAR
+    state : {away, wait, bridge};
+    near : boolean;
+    signal:boolean;
+    out : boolean;
+
+ASSIGN
+    init(state) := away;
+    init(near) := FALSE;
+    init(signal) := FALSE;
+    init(out) := TRUE;
+
+    next(out) := case
+                    state = bridge : FALSE;
+                    state = away  : TRUE;
+                    state = wait  : out;
+                    TRUE : out;
+                    esac;
+
+    next(state) := case
+                    state = away & next(out) = TRUE : wait ;
+                    state = away & next(out) = FALSE : away ;
+                    state = wait & signal : bridge ;
+                    state = wait & !signal : wait ;
+                    state = bridge & next(out) = FALSE : away ;
+                    state = bridge & next(out) = TRUE : bridge ;
+                    TRUE : state;
+                esac;
+
+   
+
+    next(near) := case
+                    next(out) = FALSE : FALSE;
+                    next(out) = TRUE  : TRUE;
+                    TRUE : near;
+                    esac;          
+
+    next(signal) := case
+                    next(near) = FALSE : FALSE;
+                    signalOther = FALSE  : TRUE;
+                    TRUE : signal;
+                    esac;                      
+
+
+
+-----------------------------------------------------------------
+-- ./NuSMV -int models/RaillRoad.smv
+--go
+--pick_state
+-- simulate -r -k 10 -v
+
+-------------------------------------------------------
+-- ./NuSMV -int models/RaillRoad.smv
+-- go_bmc
+-- check_ltlspec_bmc_onepb -k 15 -l 1
